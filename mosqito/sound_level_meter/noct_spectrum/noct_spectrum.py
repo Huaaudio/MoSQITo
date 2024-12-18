@@ -5,8 +5,8 @@ from numpy import newaxis, array, squeeze
 
 # Local application imports
 from mosqito.sound_level_meter.noct_spectrum._filter_bandwidth import _filter_bandwidth
-from mosqito.sound_level_meter.noct_spectrum._n_oct_time_filter import (
-    _n_oct_time_filter_new,
+from mosqito.sound_level_meter.noct_spectrum._n_oct_time_filter_new import (
+    _n_oct_time_filter,
 )
 from mosqito.sound_level_meter.noct_spectrum._center_freq import _center_freq
 
@@ -87,6 +87,6 @@ def noct_spectrum(sig, fs, fmin, fmax, n=3, G=10, fr=1000):
     # Calculation of the rms level of the signal in each band
     spec = []
     for fc, alpha in zip(fc_vec, alpha_vec):
-        spec.append(_n_oct_time_filter_new(sig, fs, fc, alpha))
+        spec.append(_n_oct_time_filter(sig, fs, fc, alpha))
 
     return squeeze(array(spec)), fpref
