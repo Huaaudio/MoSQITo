@@ -1,6 +1,7 @@
 import numpy as np
+from scipy import signal
 from dataclasses import dataclass
-from typing import List, Tuple
+from numba import jit, float64
 
 @dataclass
 class ThirdOctaveFilterCoeffs:
@@ -167,28 +168,29 @@ def get_filter_coeffs() -> ThirdOctaveFilterCoeffs:
     
     return ThirdOctaveFilterCoeffs(reference, differences, gains)
 
+@jit(float64[:](float64[:], float64[:], float64))
 def second_order_filter(x: np.ndarray, coeffs: np.ndarray, gain: float) -> np.ndarray:
-    """Implements a single second-order filter stage
-    
-    Args:
-        x: Input signal
-        coeffs: Filter coefficients [b0,b1,b2,a0,a1,a2]
-        gain: Filter gain
-    
-    Returns:
-        Filtered signal
-    """
-    wn0, wn1, wn2 = 0.0, 0.0, 0.0
-    y = np.zeros_like(x)
-    
-    for n in range(len(x)):
-        # Based on ISO 532-1 implementation
-        wn0 = x[n]*gain - coeffs[4]*wn1 - coeffs[5]*wn2
-        y[n] = coeffs[0]*wn0 + coeffs[1]*wn1 + coeffs[2]*wn2
-        wn2 = wn1
-        wn1 = wn0
-        
-    return y
+  """Implements a single second-order filter stage using scipy.signal.lfilter
+
+  Args:
+      x: Input signal
+      coeffs: Filter coefficients [b0,b1,b2,a0,a1,a2]
+      gain: Filter gain
+
+  Returns:
+      Filtered signal
+  """
+  y = np.zeros_like(x)
+  wn1 = 0.0
+  wn2 = 0.0
+
+  for n in range(len(x)):
+    # Exactly matching the ISO C implementation
+    wn0 = x[n]*gain - coeffs[4]*wn1 - coeffs[5]*wn2
+    y[n] = coeffs[0]*wn0 + coeffs[1]*wn1 + coeffs[2]*wn2
+    wn2 = wn1
+    wn1 = wn0
+  return y
 
 def third_octave_filter(signal: np.ndarray, fs: float, band_index: int) -> float:
     """Filter signal through one third-octave band filter
@@ -200,20 +202,15 @@ def third_octave_filter(signal: np.ndarray, fs: float, band_index: int) -> float
     
     Returns:
         RMS level in the band
-    """
-    if fs != 48000:
-        raise ValueError("Sampling frequency must be 48kHz for ISO 532-1 filters")
-        
+    """    
     # Get filter coefficients
     coeffs = get_filter_coeffs()
-    
     # Apply three filter stages in cascade
     x = signal.copy()
     for stage in range(3):
         # Combine reference and difference coefficients
         stage_coeffs = coeffs.reference[stage] - coeffs.differences[band_index][stage]
         stage_gain = coeffs.gains[band_index][stage]
-        
         # Apply filter stage
         x = second_order_filter(x, stage_coeffs, stage_gain)
     
